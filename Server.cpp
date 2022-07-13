@@ -54,6 +54,7 @@ public:
 
         while(true){
             check(Recv_Req(request));
+            std::cout<<recv;
         }
     }
 
@@ -66,9 +67,12 @@ public:
     }
 
     int Recv_Req(Request& req){
-        check(recv(_listen_socket, &req, sizeof(req), MSG_WAITALL));
-        int newfd = open(req.name, O_RDONLY);
-        return send_fd(newfd);
+
+        if(try_recv(_listen_socket, req)){
+            int newfd = open(req.name, O_RDONLY);
+            return send_fd(newfd);
+        }
+        return -1;
     }
 
     int Revc_req_with_uid(Request& req, uid_t uid){

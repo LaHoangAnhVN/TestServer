@@ -75,8 +75,9 @@ public:
     }*/
 
     int send_request(const Request& req){
-        check(send(_socket, &req, sizeof(req), MSG_OOB));
-        return recv_fd();
+        if(try_send(_socket, req))
+            return recv_fd();
+        return -1;
     }
 
     int sec_open(const char* name){
