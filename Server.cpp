@@ -67,10 +67,19 @@ public:
     }
 
     int Recv_Req(Request& req){
-
         if(try_recv(_listen_socket, req)){
-            int newfd = open(req.name, O_RDONLY);
-            return send_fd(newfd);
+            if(req.request_type == Request::REQ_OPEN){
+                int newfd = open(req.name, O_RDONLY);
+                return send_fd(newfd);
+            }
+            else{
+                if(req.request_type == Request::REQ_UNLINK){
+                    char* new_path_name ;
+                    strcpy(new_path_name, pathname_catalog);
+                    strcat(new_path_name, req.name);
+                    return unlink(new_path_name);
+                }
+            }
         }
         return -1;
     }
