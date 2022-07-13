@@ -3,7 +3,7 @@ struct Request{
         REQ_OPEN,
         REQ_UNLINK
     };
-    Type reqquest_type;
+    Type request_type;
     //int uid;
     char name[256];
 };

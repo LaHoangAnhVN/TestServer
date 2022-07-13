@@ -16,16 +16,17 @@
 
 class Client{
     int _socket;
-    char* name_server;
+    char name_server[256];
 public:
     Client(const char* name){
         strcpy(name_server, name);
         sec_init();
 
         Request new_request;
-        new_request.reqquest_type = Request::REQ_OPEN;
+        new_request.request_type = Request::REQ_OPEN;
         strcpy(new_request.name, "new");
         send_request(new_request);
+
         sec_close();
     }
 
@@ -44,7 +45,7 @@ public:
             return -1;
         }
         else{
-            std::cout<<"Connected to " << un.sun_path;
+            std::cout<<"Connected to " << un.sun_path << std::endl;
             return 1;
         }
     }
@@ -75,6 +76,22 @@ public:
 
     int send_request(const Request& req){
         check(send(_socket, &req, sizeof(req), MSG_OOB));
+        return recv_fd();
+    }
+
+    int sec_open(const char* name){
+        Request request;
+        request.request_type = Request::REQ_OPEN;
+        strcpy(request.name, name);
+        check(send(_socket, &request, sizeof(request), MSG_OOB));
+        return recv_fd();
+    }
+
+    int sec_unlink(const char* name){
+        Request request;
+        request.request_type = Request::REQ_UNLINK;
+        strcpy(request.name, name);
+        check(send(_socket, &request, sizeof(request), MSG_OOB));
         return recv_fd();
     }
 

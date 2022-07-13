@@ -11,14 +11,13 @@
 
 class Server{
     int _listen_socket;
-    uid_t* list_uid;
-    char* name_server;
-    char* pathname_catalog;
+    uid_t list_uid[3];
+    char name_server[256];
+    char pathname_catalog[256];
 public:
 
     Server(const char* name){
         strcpy(name_server, name);
-        list_uid = new uid_t[3];
         list_uid[0] = 1000;
         list_uid[1] = 2000;
         list_uid[2] = 3000;
@@ -61,7 +60,7 @@ public:
     bool check_uid(int uid){
         bool check_result = false;
         for(int i = 0; i < 3; i++){
-            if(uid == list_uid[1]) check_result = true;
+            if(uid == list_uid[i]) check_result = true;
         }
         return check_result;
     }
@@ -75,7 +74,7 @@ public:
     int Revc_req_with_uid(Request& req, uid_t uid){
         if(check_uid(uid)){
             check(recv(_listen_socket, &req, sizeof(req), MSG_WAITALL));
-            if(req.reqquest_type == Request::REQ_UNLINK){
+            if(req.request_type == Request::REQ_UNLINK){
                 char* new_path_name ;
                 strcpy(new_path_name, pathname_catalog);
                 strcat(new_path_name, req.name);
