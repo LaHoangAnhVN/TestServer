@@ -16,9 +16,9 @@
 
 class Client{
     int _socket;
-    char name_server[256];
+    const char *name_server = "Server";
 public:
-    Client(const char* name){
+    /*Client(const char* name){
         strcpy(name_server, name);
         sec_init();
 
@@ -28,7 +28,7 @@ public:
         send_request(new_request);
 
         sec_close();
-    }
+    }*/
 
     int sec_init(){
         sockaddr_un un;
@@ -83,16 +83,20 @@ public:
         Request request;
         request.request_type = Request::REQ_OPEN;
         strcpy(request.name, name);
-        check(send(_socket, &request, sizeof(request), MSG_OOB));
-        return recv_fd();
+        return send_request(request);
+
+        //check(send(_socket, &request, sizeof(request), MSG_OOB));
+        //return recv_fd();
     }
 
     int sec_unlink(const char* name){
         Request request;
         request.request_type = Request::REQ_UNLINK;
         strcpy(request.name, name);
-        check(send(_socket, &request, sizeof(request), MSG_OOB));
-        return recv_fd();
+        return send_request(request);
+
+        //check(send(_socket, &request, sizeof(request), MSG_OOB));
+        //return recv_fd();
     }
 
     int recv_fd(){
@@ -120,6 +124,24 @@ public:
     }
 };
 
-int main(){
-    Client client("Server");
+int main(int argc, char* argv[]){
+    char pathname[256];
+    int oflag;
+
+    strcpy(pathname, argv[1]);
+    oflag = atoi(argv[2]);
+
+    Client client;
+    client.sec_init();
+
+    if(oflag == 1){
+        client.sec_open(pathname);
+    }
+    else{
+        if(oflag == 2){
+            client.sec_unlink(pathname);
+        }
+    }
+
+    client.sec_close();
 }
