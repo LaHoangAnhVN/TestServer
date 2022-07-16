@@ -18,17 +18,6 @@ class Client{
     int _socket;
     const char *name_server = "Server";
 public:
-    /*Client(const char* name){
-        strcpy(name_server, name);
-        sec_init();
-
-        Request new_request;
-        new_request.request_type = Request::REQ_OPEN;
-        strcpy(new_request.name, "new");
-        send_request(new_request);
-
-        sec_close();
-    }*/
 
     int sec_init(){
         sockaddr_un un;
@@ -84,10 +73,24 @@ public:
         Request request;
         request.request_type = Request::REQ_OPEN;
         strcpy(request.name, name);
-        return send_request(request);
+        int open_fd = send_request(request);
+        if(open_fd == -1){
+            std::cout<<"Cant open file"<<std::endl;
+            return -1;
+        }
+        else{
+            int count = 0;
+            char byte;
+            while(read(open_fd, &byte, 1)){
+                count++;
 
-        //check(send(_socket, &request, sizeof(request), MSG_OOB));
-        //return recv_fd();
+            }
+            lseek(open_fd, 0, SEEK_SET);
+            char buf[6];
+            check(read(open_fd, buf, 6));
+            std::cout<<buf<<std::endl;
+            return 1;
+        }
     }
 
     int sec_unlink(const char* name){
@@ -96,8 +99,6 @@ public:
         strcpy(request.name, name);
         return send_request(request);
 
-        //check(send(_socket, &request, sizeof(request), MSG_OOB));
-        //return recv_fd();
     }
 
     int recv_fd(){
@@ -105,23 +106,26 @@ public:
         struct iovec iov[1];
         struct msghdr msg;
         char buf[MAXLINE];
-        struct cmsghdr *cmptr = NULL;
+        struct cmsghdr *cmptr = (cmsghdr*)malloc(CONTROLLEN);
 
-        while(true){
-            iov[0].iov_base = buf;
-            iov[0].iov_len = sizeof(buf);
-            msg.msg_iov = iov;
-            msg.msg_iovlen = 1;
-            msg.msg_name = NULL;
-            msg.msg_namelen = 0;
-            msg.msg_control = cmptr;
-            msg.msg_controllen = CONTROLLEN;
+        iov[0].iov_base = buf;
+        iov[0].iov_len = sizeof(buf);
+        msg.msg_iov = iov;
+        msg.msg_iovlen = 1;
+        msg.msg_name = NULL;
+        msg.msg_namelen = 0;
+        msg.msg_control = cmptr;
+        msg.msg_controllen = CONTROLLEN;
 
-            check(recvmsg(_socket, &msg, 0));
-            newfd = *(int*) CMSG_DATA(cmptr);
-
-            return  newfd;
+        check(recvmsg(_socket, &msg, 0));
+        if(buf[1] != 0){
+            return -1;
         }
+        newfd = *(int*) CMSG_DATA(cmptr);
+
+        free(cmptr);
+
+        return newfd;
     }
 };
 

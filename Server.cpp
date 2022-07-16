@@ -3,7 +3,11 @@
 #include <sys/un.h>
 #include <errno.h>
 #include <unistd.h>
+#include <vector>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/types.h>
 #include "check.hpp"
 #include "Common.h"
 
@@ -11,27 +15,37 @@
 
 class Server{
     int _listen_socket;
-    uid_t list_uid[3];
+    std::vector<uid_t> list_uid;
     char name_server[256];
     char pathname_catalog[256];
 public:
 
-    Server(const char* name){
-        strcpy(name_server, name);
-        list_uid[0] = 1000;
-        list_uid[1] = 2000;
-        list_uid[2] = 3000;
-        strcpy(pathname_catalog, "/home/vtc15");
+    Server(const char* filename){
+        int fd_open = open(filename, O_RDONLY);
+
+        char buf[1024];
+
+        check(read(fd_open, buf, 1024));
+
+        strcpy(name_server, strtok(buf, "\n"));
+        strcpy(pathname_catalog, strtok(NULL, "\n"));
+        if(opendir(pathname_catalog) == NULL){
+            mkdir(pathname_catalog, S_IRWXU);
+        }
+
+        list_uid.push_back((uid_t)atoi(strtok(NULL, "\n")));
+        list_uid.push_back((uid_t)atoi(strtok(NULL, "\n")));
+        list_uid.push_back((uid_t)atoi(strtok(NULL, "\n")));
 
         struct sockaddr_un un;
 
         _listen_socket = check(socket(AF_UNIX, SOCK_STREAM,0));
-        unlink(name);
+        unlink(name_server);
 
         memset(&un, 0, sizeof(un));
         un.sun_family = AF_UNIX;
-        strcpy(un.sun_path, name);
-        int len = offsetof(struct sockaddr_un, sun_path) + strlen(name);
+        strcpy(un.sun_path, name_server);
+        int len = offsetof(struct sockaddr_un, sun_path) + strlen(name_server);
 
         check(bind(_listen_socket, (sockaddr*)&un, len));
         check(listen(_listen_socket, 1));
@@ -42,23 +56,35 @@ public:
         struct sockaddr_un un;
         socklen_t len = sizeof(un);
 
-        check(accept(_listen_socket, (sockaddr*)&un, &len));
-        int optval = 1;
-        check(setsockopt(_listen_socket, SOL_SOCKET, SO_PASSCRED, &optval, sizeof(optval)));
-
-        struct ucred scred;
-        socklen_t _len = sizeof(struct ucred);
-        check(getsockopt(_listen_socket, SOL_SOCKET, SO_PEERCRED, &scred, &_len));
-        std::cout<<"Connect from uid: " << scred.uid <<std::endl;
-        Request request;
-
         while(true){
-            check(Recv_Req(request));
-            std::cout<<recv;
+            int connect_socket = check(accept(_listen_socket, (sockaddr*)&un, &len));
+            int optval = 1;
+            check(setsockopt(connect_socket, SOL_SOCKET, SO_PASSCRED, &optval, sizeof(optval)));
+
+            struct ucred scred;
+            socklen_t _len = sizeof(struct ucred);
+            check(getsockopt(connect_socket, SOL_SOCKET, SO_PEERCRED, &scred, &_len));
+            std::cout<<"Connect from uid: " << scred.uid <<std::endl;
+            std::cout<<"Pathname catalog: "<< pathname_catalog<<std::endl;
+            std::cout<<"uid: "<< list_uid[0]<<std::endl;
+            std::cout<<"uid: "<< list_uid[1]<<std::endl;
+            std::cout<<"uid: "<< list_uid[2]<<std::endl;
+            Request request;
+
+
+            if(check_uid(scred.uid)){
+                while(Recv_Req(connect_socket, request) >= 0){
+                    std::cout<<request.name<<std::endl;
+                }
+            }
+            else {
+                send_fd(connect_socket, -1);
+            }
+
         }
     }
 
-    bool check_uid(int uid){
+    bool check_uid(uid_t uid){
         bool check_result = false;
         for(int i = 0; i < 3; i++){
             if(uid == list_uid[i]) check_result = true;
@@ -66,43 +92,44 @@ public:
         return check_result;
     }
 
-    int Recv_Req(Request& req){
-        if(try_recv(_listen_socket, req)){
+    int Recv_Req(int fd, Request& req){
+        if(try_recv(fd, req)){
             if(req.request_type == Request::REQ_OPEN){
-                int newfd = open(req.name, O_RDONLY);
-                return send_fd(newfd);
+                char new_path_name[1024];
+                strcpy(new_path_name, pathname_catalog);
+                strcat(new_path_name, req.name);
+                int newfd = open(new_path_name, O_RDONLY);
+                return send_fd(fd, newfd);
             }
             else{
                 if(req.request_type == Request::REQ_UNLINK){
-                    char* new_path_name ;
+                    char new_path_name[1024];
                     strcpy(new_path_name, pathname_catalog);
                     strcat(new_path_name, req.name);
-                    return unlink(new_path_name);
+                    unlink(new_path_name);
+                    int x = 0;
+                    return send(fd, &x, sizeof(int), 0);
                 }
             }
         }
         return -1;
     }
 
-    int Revc_req_with_uid(Request& req, uid_t uid){
+    int Revc_req_with_uid(int fd, Request& req, uid_t uid){
         if(check_uid(uid)){
-            check(recv(_listen_socket, &req, sizeof(req), MSG_WAITALL));
-            if(req.request_type == Request::REQ_UNLINK){
-                char* new_path_name ;
-                strcpy(new_path_name, pathname_catalog);
-                strcat(new_path_name, req.name);
-                return unlink(new_path_name);
+            while(Recv_Req(fd, req) >= 0){
+                std::cout<<req.name<<std::endl;
             }
-            int newfd = open(req.name, O_RDONLY);
-            return send_fd(newfd);
         }
+        send_fd(fd, -1);
+        return -1;
     }
 
-    int send_fd(int newfd){
+    int send_fd(int connect_socket, int newfd){
         struct iovec iov[1];
         struct msghdr msg;
         char buf[2];
-        struct cmsghdr *cmptr = NULL;
+        struct cmsghdr *cmptr = (cmsghdr*)malloc(CONTROLLEN);
 
         iov[0].iov_base = buf;
         iov[0].iov_len = 2;
@@ -129,11 +156,13 @@ public:
         }
 
         buf[0] = 0;
-        return check(sendmsg(_listen_socket, &msg, 0));
+        int x = check(sendmsg(connect_socket, &msg, 0));
+        free(cmptr);
+        return x;
     }
 };
 
 int main(){
-    Server NewServer("Server");
+    Server NewServer("/home/vtc15/fileconfigure.txt");
     NewServer.Connect_client();
 }
