@@ -1,7 +1,6 @@
 #include <iostream>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <errno.h>
 #include <unistd.h>
 #include <vector>
 #include <dirent.h>
@@ -21,21 +20,22 @@ class Server{
 public:
 
     Server(const char* filename){
-        int fd_open = open(filename, O_RDONLY);
-
-        char buf[1024];
-
-        check(read(fd_open, buf, 1024));
-
-        strcpy(name_server, strtok(buf, "\n"));
-        strcpy(pathname_catalog, strtok(NULL, "\n"));
-        if(opendir(pathname_catalog) == NULL){
-            mkdir(pathname_catalog, S_IRWXU);
+        int fd_open = open(filename, O_RDONLY);//fopen()
+        auto open_file = fopen(filename, "r");
+        fscanf(open_file, "%s", name_server);
+        fscanf(open_file, "%s", pathname_catalog);
+        char buf[256];
+        while(fscanf(open_file, "%s", buf) != EOF){
+            list_uid.push_back((uid_t)atoi(buf));
         }
 
-        list_uid.push_back((uid_t)atoi(strtok(NULL, "\n")));
-        list_uid.push_back((uid_t)atoi(strtok(NULL, "\n")));
-        list_uid.push_back((uid_t)atoi(strtok(NULL, "\n")));
+        auto de = opendir(pathname_catalog);
+        if(de == NULL){
+            mkdir(pathname_catalog, S_IRWXU);
+        }
+        else{
+            closedir(de);
+        }
 
         struct sockaddr_un un;
 
@@ -66,9 +66,9 @@ public:
             check(getsockopt(connect_socket, SOL_SOCKET, SO_PEERCRED, &scred, &_len));
             std::cout<<"Connect from uid: " << scred.uid <<std::endl;
             std::cout<<"Pathname catalog: "<< pathname_catalog<<std::endl;
-            std::cout<<"uid: "<< list_uid[0]<<std::endl;
-            std::cout<<"uid: "<< list_uid[1]<<std::endl;
-            std::cout<<"uid: "<< list_uid[2]<<std::endl;
+            for(int i = 0; i < list_uid.size(); i++){
+                std::cout<<"uid: " <<list_uid[i]<<std::endl;
+            }
             Request request;
 
 
@@ -112,16 +112,6 @@ public:
                 }
             }
         }
-        return -1;
-    }
-
-    int Revc_req_with_uid(int fd, Request& req, uid_t uid){
-        if(check_uid(uid)){
-            while(Recv_Req(fd, req) >= 0){
-                std::cout<<req.name<<std::endl;
-            }
-        }
-        send_fd(fd, -1);
         return -1;
     }
 

@@ -1,11 +1,8 @@
 #include <iostream>
-#include <arpa/inet.h>
-#include <string>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/un.h>
-#include <sys/uio.h>
 #include <sys/socket.h>
 #include "check.hpp"
 #include "Common.h"
@@ -42,26 +39,6 @@ public:
     int sec_close(){
         return close(_socket);
     }
-
-    /*Client(const char* name){
-        sockaddr_un un;
-
-        _socket = check(socket(AF_UNIX, SOCK_STREAM, 0));
-
-        memset(&un, 0, sizeof(un));
-        un.sun_family = AF_UNIX;
-        strcpy(un.sun_path, name);
-        int len = offsetof(struct sockaddr_un, sun_path) + strlen(name);
-
-        check(connect(_socket, (sockaddr*) &un, len));
-
-        Request new_request;
-        new_request.reqquest_type = Request::Type::REQ_OPEN;
-        strcpy(new_request.name, "/home/vtc15/new");
-        std::cout<< send_request(new_request);
-
-        close(_socket);
-    }*/
 
     int send_request(const Request& req){
         if(try_send(_socket, req))

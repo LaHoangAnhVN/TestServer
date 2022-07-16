@@ -15,7 +15,6 @@ struct Request{
         REQ_UNLINK
     };
     Type request_type;
-    //int uid;
     char name[256];
 };
 
